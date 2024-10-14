@@ -1,19 +1,32 @@
-import express, {Request, Response} from "express";
-import dotenv from 'dotenv'
+import { ApolloServer } from "@apollo/server"
+import { expressMiddleware } from "@apollo/server/express4"
+import { ApolloServerPluginDrainHttpServer } from '@apollo/server/plugin/drainHttpServer';
+import cors  from 'cors'
+import express from 'express'
+import http from 'http'
 
-// configures dotenv to work in your application
-dotenv.config();
-const app = express();
+import { buildSchema } from "drizzle-graphql"
+import { drizzle } from 'drizzle-orm/postgres-js'
+import client from './db/index'
+import * as dbSchema from './db/schema'
 
-const PORT = process.env.PORT;
+const db = drizzle(client, {schema: dbSchema})
+const { schema } = buildSchema(db)
 
-app.get("/", (request: Request, response: Response) => { 
-  response.status(200).send("Hello World typscript tsx");
-});
+const app = express()
 
-app.listen(PORT, () => { 
-  console.log("Server running at PORT: ", PORT); 
-}).on("error", (error) => {
-  // gracefully handle error
-  throw new Error(error.message);
-})
+const httpServer = http.createServer(app)
+
+const server = new ApolloServer({ schema, plugins: [ApolloServerPluginDrainHttpServer({ httpServer})] });
+
+await server.start()
+
+app.use(
+    '/products',
+    cors<cors.CorsRequest>(),
+  express.json(),
+  expressMiddleware(server)
+)
+
+await new Promise<void>(resolve => httpServer.listen({ port: 4000}, resolve))
+console.log(`🚀 Server ready at http://localhost:4000/`);
